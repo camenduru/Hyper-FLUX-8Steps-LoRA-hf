@@ -1,146 +1,76 @@
+import spaces
+import argparse
+import os
+import time
+from os import path
+from safetensors.torch import load_file
+from huggingface_hub import hf_hub_download
+
+cache_path = path.join(path.dirname(path.abspath(__file__)), "models")
+os.environ["TRANSFORMERS_CACHE"] = cache_path
+os.environ["HF_HUB_CACHE"] = cache_path
+os.environ["HF_HOME"] = cache_path
+
 import gradio as gr
-import numpy as np
-import random
-from diffusers import DiffusionPipeline
 import torch
+from diffusers import FluxPipeline
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+torch.backends.cuda.matmul.allow_tf32 = True
 
-if torch.cuda.is_available():
-    torch.cuda.max_memory_allocated(device=device)
-    pipe = DiffusionPipeline.from_pretrained("stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16", use_safetensors=True)
-    pipe.enable_xformers_memory_efficient_attention()
-    pipe = pipe.to(device)
-else: 
-    pipe = DiffusionPipeline.from_pretrained("stabilityai/sdxl-turbo", use_safetensors=True)
-    pipe = pipe.to(device)
+class timer:
+    def __init__(self, method_name="timed process"):
+        self.method = method_name
 
-MAX_SEED = np.iinfo(np.int32).max
-MAX_IMAGE_SIZE = 1024
+    def __enter__(self):
+        self.start = time.time()
+        print(f"{self.method} starts")
 
-def infer(prompt, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps):
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end = time.time()
+        print(f"{self.method} took {str(round(end - self.start, 2))}s")
 
-    if randomize_seed:
-        seed = random.randint(0, MAX_SEED)
-        
-    generator = torch.Generator().manual_seed(seed)
-    
-    image = pipe(
-        prompt = prompt, 
-        negative_prompt = negative_prompt,
-        guidance_scale = guidance_scale, 
-        num_inference_steps = num_inference_steps, 
-        width = width, 
-        height = height,
-        generator = generator
-    ).images[0] 
-    
-    return image
+if not path.exists(cache_path):
+    os.makedirs(cache_path, exist_ok=True)
 
-examples = [
-    "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
-    "An astronaut riding a green horse",
-    "A delicious ceviche cheesecake slice",
-]
+pipe = FluxPipeline.from_pretrained("black-forest-labs/FLUX.1-dev", torch_dtype=torch.bfloat16)
+pipe.load_lora_weights(hf_hub_download("ByteDance/Hyper-SD", "Hyper-FLUX.1-dev-8steps-lora.safetensors"))
+pipe.fuse_lora(lora_scale=0.125)
+pipe.to(device="cuda", dtype=torch.bfloat16)
 
-css="""
-#col-container {
-    margin: 0 auto;
-    max-width: 520px;
-}
-"""
-
-if torch.cuda.is_available():
-    power_device = "GPU"
-else:
-    power_device = "CPU"
-
-with gr.Blocks(css=css) as demo:
-    
-    with gr.Column(elem_id="col-container"):
-        gr.Markdown(f"""
-        # Text-to-Image Gradio Template
-        Currently running on {power_device}.
-        """)
-        
+with gr.Blocks() as demo:
+    with gr.Column():
         with gr.Row():
-            
-            prompt = gr.Text(
-                label="Prompt",
-                show_label=False,
-                max_lines=1,
-                placeholder="Enter your prompt",
-                container=False,
-            )
-            
-            run_button = gr.Button("Run", scale=0)
-        
-        result = gr.Image(label="Result", show_label=False)
+            with gr.Column():
+                num_images = gr.Slider(label="Number of Images", minimum=1, maximum=8, step=1, value=4, interactive=True)
+                height = gr.Number(label="Image Height", value=1024, interactive=True)
+                width = gr.Number(label="Image Width", value=1024, interactive=True)
+                # steps = gr.Slider(label="Inference Steps", minimum=1, maximum=8, step=1, value=1, interactive=True)
+                # eta = gr.Number(label="Eta (Corresponds to parameter eta (η) in the DDIM paper, i.e. 0.0 eqauls DDIM, 1.0 equals LCM)", value=1., interactive=True)
+                prompt = gr.Text(label="Prompt", value="a photo of a cat", interactive=True)
+                seed = gr.Number(label="Seed", value=3413, interactive=True)
+                btn = gr.Button(value="run")
+            with gr.Column():
+                output = gr.Gallery(height=1024)
 
-        with gr.Accordion("Advanced Settings", open=False):
-            
-            negative_prompt = gr.Text(
-                label="Negative prompt",
-                max_lines=1,
-                placeholder="Enter a negative prompt",
-                visible=False,
-            )
-            
-            seed = gr.Slider(
-                label="Seed",
-                minimum=0,
-                maximum=MAX_SEED,
-                step=1,
-                value=0,
-            )
-            
-            randomize_seed = gr.Checkbox(label="Randomize seed", value=True)
-            
-            with gr.Row():
-                
-                width = gr.Slider(
-                    label="Width",
-                    minimum=256,
-                    maximum=MAX_IMAGE_SIZE,
-                    step=32,
-                    value=512,
-                )
-                
-                height = gr.Slider(
-                    label="Height",
-                    minimum=256,
-                    maximum=MAX_IMAGE_SIZE,
-                    step=32,
-                    value=512,
-                )
-            
-            with gr.Row():
-                
-                guidance_scale = gr.Slider(
-                    label="Guidance scale",
-                    minimum=0.0,
-                    maximum=10.0,
-                    step=0.1,
-                    value=0.0,
-                )
-                
-                num_inference_steps = gr.Slider(
-                    label="Number of inference steps",
-                    minimum=1,
-                    maximum=12,
-                    step=1,
-                    value=2,
-                )
-        
-        gr.Examples(
-            examples = examples,
-            inputs = [prompt]
-        )
+            @spaces.GPU
+            def process_image(num_images, height, width, prompt, seed):
+                global pipe
+                with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16), timer("inference"):
+                    return pipe(
+                        prompt=[prompt]*num_images,
+                        generator=torch.Generator().manual_seed(int(seed)),
+                        num_inference_steps=8,
+                        guidance_scale=3.5,
+                        height=int(height),
+                        width=int(width)
+                    ).images
 
-    run_button.click(
-        fn = infer,
-        inputs = [prompt, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps],
-        outputs = [result]
-    )
+            reactive_controls = [num_images, height, width, prompt, seed]
 
-demo.queue().launch()
+            # for control in reactive_controls:
+            #     control.change(fn=process_image, inputs=reactive_controls, outputs=[output])
+
+            btn.click(process_image, inputs=reactive_controls, outputs=[output])
+
+if __name__ == "__main__":
+    demo.launch()
