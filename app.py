@@ -41,7 +41,7 @@ with gr.Blocks() as demo:
     with gr.Column():
         with gr.Row():
             with gr.Column():
-                # num_images = gr.Slider(label="Number of Images", minimum=1, maximum=8, step=1, value=4, interactive=True)
+                num_images = gr.Slider(label="Number of Images", minimum=1, maximum=2, step=1, value=1, interactive=True)
                 height = gr.Number(label="Image Height", value=1024, interactive=True)
                 width = gr.Number(label="Image Width", value=1024, interactive=True)
                 steps = gr.Slider(label="Inference Steps", minimum=6, maximum=25, step=1, value=8, interactive=True)
@@ -51,14 +51,14 @@ with gr.Blocks() as demo:
                 seed = gr.Number(label="Seed", value=3413, interactive=True)
                 btn = gr.Button(value="run")
             with gr.Column():
-                output = gr.Gallery(height=1024)
+                output = gr.Gallery(height=512)
 
             @spaces.GPU
-            def process_image(height, width, steps, scales, prompt, seed):
+            def process_image(num_images, height, width, steps, scales, prompt, seed):
                 global pipe
                 with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16), timer("inference"):
                     return pipe(
-                        prompt=[prompt],
+                        prompt=[prompt] * num_images,
                         generator=torch.Generator().manual_seed(int(seed)),
                         num_inference_steps=steps,
                         guidance_scale=scales,
@@ -66,7 +66,7 @@ with gr.Blocks() as demo:
                         width=int(width)
                     ).images
 
-            reactive_controls = [height, width, steps, scales, prompt, seed]
+            reactive_controls = [num_images, height, width, steps, scales, prompt, seed]
 
             # for control in reactive_controls:
             #     control.change(fn=process_image, inputs=reactive_controls, outputs=[output])
