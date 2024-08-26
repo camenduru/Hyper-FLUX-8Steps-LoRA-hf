@@ -41,10 +41,11 @@ with gr.Blocks() as demo:
     with gr.Column():
         with gr.Row():
             with gr.Column():
-                num_images = gr.Slider(label="Number of Images", minimum=1, maximum=8, step=1, value=4, interactive=True)
+                # num_images = gr.Slider(label="Number of Images", minimum=1, maximum=8, step=1, value=4, interactive=True)
                 height = gr.Number(label="Image Height", value=1024, interactive=True)
                 width = gr.Number(label="Image Width", value=1024, interactive=True)
-                # steps = gr.Slider(label="Inference Steps", minimum=1, maximum=8, step=1, value=1, interactive=True)
+                steps = gr.Slider(label="Inference Steps", minimum=6, maximum=25, step=1, value=8, interactive=True)
+                scales = gr.Number(label="Guidance Scale", value=3.5, interactive=True)
                 # eta = gr.Number(label="Eta (Corresponds to parameter eta (η) in the DDIM paper, i.e. 0.0 eqauls DDIM, 1.0 equals LCM)", value=1., interactive=True)
                 prompt = gr.Text(label="Prompt", value="a photo of a cat", interactive=True)
                 seed = gr.Number(label="Seed", value=3413, interactive=True)
@@ -53,19 +54,19 @@ with gr.Blocks() as demo:
                 output = gr.Gallery(height=1024)
 
             @spaces.GPU
-            def process_image(num_images, height, width, prompt, seed):
+            def process_image(height, width, steps, scales, prompt, seed):
                 global pipe
                 with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16), timer("inference"):
                     return pipe(
-                        prompt=[prompt]*num_images,
+                        prompt=[prompt],
                         generator=torch.Generator().manual_seed(int(seed)),
-                        num_inference_steps=8,
-                        guidance_scale=3.5,
+                        num_inference_steps=steps,
+                        guidance_scale=scales,
                         height=int(height),
                         width=int(width)
                     ).images
 
-            reactive_controls = [num_images, height, width, prompt, seed]
+            reactive_controls = [height, width, steps, scales, prompt, seed]
 
             # for control in reactive_controls:
             #     control.change(fn=process_image, inputs=reactive_controls, outputs=[output])
