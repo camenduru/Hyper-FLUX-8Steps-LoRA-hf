@@ -1,6 +1,6 @@
 accelerate
-diffusers
+diffusers==0.30.0
 invisible_watermark
 torch
-transformers
+transformers==4.43.3
 xformers
