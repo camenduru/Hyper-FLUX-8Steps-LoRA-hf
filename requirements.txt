@@ -4,3 +4,4 @@ invisible_watermark
 torch
 transformers==4.43.3
 xformers
+sentencepiece
