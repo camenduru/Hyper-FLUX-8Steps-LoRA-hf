@@ -98,7 +98,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     generate_btn.click(
         process_image,
         inputs=[height, width, steps, scales, prompt, seed],
-        outputs=[output]
+        outputs=output
     )
 
 if __name__ == "__main__":
