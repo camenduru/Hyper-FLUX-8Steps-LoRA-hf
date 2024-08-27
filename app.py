@@ -39,8 +39,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown(
         """
         <div style="text-align: center; max-width: 650px; margin: 0 auto;">
-            <h1 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem;">FLUX Image Generator</h1>
-            <p style="font-size: 1rem; margin-bottom: 1.5rem;">Create unique images with AI. Just describe what you want to see!</p>
+            <h1 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; display: contents;">Hyper-FLUX-8steps-LoRA</h1>
+            <p style="font-size: 1rem; margin-bottom: 1.5rem;">AutoML team from ByteDance</p>
         </div>
         """
     )
@@ -92,7 +92,8 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 num_inference_steps=int(steps),
                 guidance_scale=float(scales),
                 height=int(height),
-                width=int(width)
+                width=int(width),
+                max_sequence_length=256
             ).images[0]
 
     generate_btn.click(
