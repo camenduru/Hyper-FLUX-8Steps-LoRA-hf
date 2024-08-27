@@ -93,7 +93,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 guidance_scale=float(scales),
                 height=int(height),
                 width=int(width)
-            ).images
+            ).images[0]
 
     generate_btn.click(
         process_image,
